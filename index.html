@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>モンスター討伐クリッカー v4.1</title>
+  <title>モンスター討伐クリッカー v4.2</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -391,5 +391,18 @@
   </div>
 
   <script src="main.js" defer></script>
+
+  <!-- Panic / Error Overlay -->
+  <div id="panic" class="modal" role="dialog" aria-modal="true" aria-labelledby="panicTitle" style="display:none">
+    <div class="box">
+      <h3 id="panicTitle">エラーが発生しました</h3>
+      <pre id="panicMsg" style="white-space:pre-wrap;background:#0f1434;border:1px solid rgba(255,255,255,.12);padding:8px;border-radius:8px;max-height:50vh;overflow:auto;color:#dfe7ff"></pre>
+      <div class="actions">
+        <button id="panicClose" class="ghost">閉じる</button>
+        <button id="panicReload" class="danger">再読み込み</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

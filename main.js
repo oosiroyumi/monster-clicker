@@ -1,4 +1,33 @@
 
+// ====== グローバルエラーハンドラ（原因を画面表示） ======
+(function(){
+  function showPanic(msg){
+    try{
+      var el=document.getElementById('panic');
+      var pre=document.getElementById('panicMsg');
+      if(el && pre){
+        pre.textContent=String(msg||'Unknown error');
+        el.style.display='flex';
+        var c=document.getElementById('panicClose'); if(c) c.onclick=()=>{el.style.display='none'};
+        var r=document.getElementById('panicReload'); if(r) r.onclick=()=>{location.reload()};
+      } else {
+        alert('[エラー]\\n'+msg);
+      }
+    }catch(e){ alert('[重大なエラー] '+(e&&e.message)); }
+  }
+  window.__showPanic = showPanic;
+  window.addEventListener('error', function(e){
+    if(!e) return;
+    const detail = (e.message||'') + '\\n' + (e.filename? (e.filename+':'+e.lineno+':'+e.colno): '');
+    showPanic(detail);
+  });
+  window.addEventListener('unhandledrejection', function(e){
+    const reason = e && (e.reason && (e.reason.stack||e.reason.message) || e.reason) || '(no reason)';
+    showPanic('Promise rejection: '+reason);
+  });
+})();
+
+
 // ====== 安全なストレージ（Safari プライベート等で localStorage が例外を投げる問題を回避） ======
 const Storage = (()=>{
   let ok = true;
@@ -1120,7 +1149,7 @@ function init(){
   saveIntervalId = setInterval(()=>{ save(); tryUnlockAchievements(); }, 5000);
 }
 
-init();
+try{ init(); }catch(e){ console.error(e); if(window.__showPanic) window.__showPanic(e && (e.stack||e.message||e)); }
 
 // ====== セルフテスト ======
 (function runSelfTests(){

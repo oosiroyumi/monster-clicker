@@ -1,3 +1,21 @@
+
+// ====== 安全なストレージ（Safari プライベート等で localStorage が例外を投げる問題を回避） ======
+const Storage = (()=>{
+  let ok = true;
+  try{
+    const k='__mc_test__'+Math.random().toString(36).slice(2);
+    window.Storage.set(k,'1');
+    window.Storage.remove(k);
+  }catch(e){ ok = false; console.warn('[Storage] localStorage unavailable, falling back to memory', e); }
+  const mem = new Map();
+  return {
+    ok: ()=>ok,
+    get:(k)=>{ try{ return ok? window.Storage.get(k) : (mem.has(k)? mem.get(k): null); }catch(e){ return null; } },
+    set:(k,v)=>{ try{ ok? window.Storage.set(k,v) : mem.set(k,v); }catch(e){ /* ignore */ } },
+    remove:(k)=>{ try{ ok? window.Storage.remove(k) : mem.delete(k); }catch(e){ /* ignore */ } }
+  };
+})();
+
 // ====== 数字整形（日本語単位/国際単位） ======
 const NUMFMT = { mode: 'jp' };
 function fmtJP(n){
@@ -823,14 +841,14 @@ function refreshUI(){
 function save(){
   if(IS_RESETTING) return;
   state.lastSaved = Date.now();
-  localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+  Storage.set(SAVE_KEY, JSON.stringify(state));
   DOM.saveHint.textContent = new Date().toLocaleTimeString();
 }
 function load(){
-  let raw = localStorage.getItem(SAVE_KEY);
+  let raw = Storage.get(SAVE_KEY);
   if(!raw){
     const oldKeys = ['monster_clicker_v3_boss_artifact_challenge_ja','monster_clicker_v2_multi_units_ja','monster_clicker_v1_ja'];
-    for(const k of oldKeys){ const v = localStorage.getItem(k); if(v){ raw=v; break; } }
+    for(const k of oldKeys){ const v = Storage.get(k); if(v){ raw=v; break; } }
   }
   if(!raw) return;
   try{
@@ -1007,8 +1025,8 @@ DOM.qty10.addEventListener('click', ()=>setBuyQty(10));
 DOM.qty100.addEventListener('click', ()=>setBuyQty(100));
 DOM.qtyMax.addEventListener('click', ()=>setBuyQty('max'));
 
-DOM.fmtJP.addEventListener('click', ()=>{ NUMFMT.mode='jp'; refreshUI(); localStorage.setItem(SAVE_KEY+'_fmt','jp'); });
-DOM.fmtSI.addEventListener('click', ()=>{ NUMFMT.mode='si'; refreshUI(); localStorage.setItem(SAVE_KEY+'_fmt','si'); });
+DOM.fmtJP.addEventListener('click', ()=>{ NUMFMT.mode='jp'; refreshUI(); Storage.set(SAVE_KEY+'_fmt','jp'); });
+DOM.fmtSI.addEventListener('click', ()=>{ NUMFMT.mode='si'; refreshUI(); Storage.set(SAVE_KEY+'_fmt','si'); });
 
 DOM.soundToggle.addEventListener('change', (e)=>{ state.sound = e.target.checked; SFX.setEnabled(state.sound); });
 SFX.setEnabled(state.sound);
@@ -1053,7 +1071,7 @@ function doHardReset(){
   try{ if(saveIntervalId) clearInterval(saveIntervalId); }catch(e){}
   try{
     const KEYS = [SAVE_KEY, 'monster_clicker_v3_boss_artifact_challenge_ja','monster_clicker_v2_multi_units_ja','monster_clicker_v1_ja'];
-    KEYS.forEach(k=>localStorage.removeItem(k));
+    KEYS.forEach(k=>Storage.remove(k));
   }catch(e){ console.warn('hard reset failed', e); }
   location.reload();
 }
@@ -1069,13 +1087,13 @@ document.getElementById('cancelReset').addEventListener('click', ()=>{ const m=d
 window.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ const m=document.getElementById('resetModal'); if(m && m.style.display==='flex'){ m.style.display='none'; } const r=DOM.resultModal; if(r && r.style.display==='flex'){ r.style.display='none'; } } });
 
 // Persist on tab hide/close
-window.addEventListener('beforeunload', ()=>{ if(!IS_RESETTING) save(); });
-document.addEventListener('visibilitychange', ()=>{ if(document.hidden && !IS_RESETTING) save(); });
+window.addEventListener('beforeunload', ()=>{ try{ if(!IS_RESETTING) save(); }catch(e){} });
+document.addEventListener('visibilitychange', ()=>{ try{ if(document.hidden && !IS_RESETTING) save(); }catch(e){} });
 
 // ====== 初期起動 ======
 function init(){
   load();
-  NUMFMT.mode = (localStorage.getItem(SAVE_KEY+'_fmt')||'jp');
+  NUMFMT.mode = (Storage.get(SAVE_KEY+'_fmt')||'jp');
   // offline progress (CPS+DPS)
   const now = Date.now();
   const lastTs = state.lastSaved || now;
@@ -1099,7 +1117,7 @@ function init(){
   DOM.battlelog.classList.toggle('collapsed', state.ui.logCollapsed);
   refreshUI();
   requestAnimationFrame((t)=>{ last=t; requestAnimationFrame(loop); });
-  saveIntervalId = setInterval(()=>{ save(); tryUnlockAchievements(); }, 3000);
+  saveIntervalId = setInterval(()=>{ save(); tryUnlockAchievements(); }, 5000);
 }
 
 init();

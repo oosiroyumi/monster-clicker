@@ -3,22 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>モンスター討伐クリッカー</title>
+  <title>モンスター討伐クリッカー v4</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="wrap">
-    <header>
-      <h1>🗡️ モンスター討伐クリッカー</h1>
+    <header class="header">
+      <div class="brand">
+        <h1>🗡️ モンスター討伐クリッカー <small id="playerTitle"></small></h1>
+        <div class="sub muted">v4: 実績・新ユニット・コレクション・UI刷新</div>
+      </div>
       <div class="statbar">
         <div class="pill" title="所持コイン"><span>🪙</span><strong id="coins">0</strong></div>
         <div class="pill" title="転生コイン"><span>✨</span><strong id="rebirthCoins">0</strong></div>
-        <div class="pill" title="転生ボーナス（与ダメ/獲得コイン）"><span>📈</span><strong id="bonus">×1.00</strong></div>
+        <div class="pill" title="与ダメ/獲得ボーナス（転生/恒久）"><span>📈</span><strong id="bonus">×1.00</strong></div>
         <div class="pill" title="クリコンボ"><span>💥</span><strong id="comboView">×1.00</strong></div>
         <div class="pill" title="合計DPS"><span>⚔️</span><strong id="totalDps">0</strong></div>
         <div class="pill" title="合計CPS"><span>⛏️</span><strong id="totalCps">0</strong></div>
         <div class="pill" title="アーティファクト数"><span>🧿</span><strong id="artifactCount">0</strong></div>
-        <div class="pill" title="効果音 ON/OFF"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input id="soundToggle" type="checkbox" checked/>🔊SFX</label></div>
+        <div class="pill" title="効果音 ON/OFF"><label class="sfx"><input id="soundToggle" type="checkbox" checked/><span>🔊SFX</span></label></div>
       </div>
     </header>
 
@@ -61,9 +64,11 @@
       <aside class="card">
         <div class="shop-tabs">
           <div class="tab active" id="tabShop">ショップ</div>
-          <div class="tab" id="tabRebirth">転生ショップ</div>
+          <div class="tab" id="tabRebirth">転生</div>
+          <div class="tab" id="tabCollection">コレクション</div>
         </div>
 
+        <!-- SHOP -->
         <div id="panelShop">
           <div class="row qtybar">
             <div class="seg">
@@ -78,29 +83,31 @@
             </div>
           </div>
           <div class="shoplist">
+            <!-- Click power -->
             <div class="shopitem">
               <div class="icon">🗡️</div>
               <div class="grow">
                 <h4>攻撃力 強化 <small id="clickLv">Lv.1</small></h4>
-                <p>クリック攻撃力を +1。現在: <strong id="clickDmg">1</strong></p>
+                <p>クリック攻撃力を +1（コスト緩和版）。現在: <strong id="clickDmg">1</strong></p>
                 <div class="row">
-                  <div class="kpi">💰 コスト: <strong id="clickCost">8</strong><small id="clickBulk" class="muted"></small></div>
+                  <div class="kpi">💰 コスト: <strong id="clickCost">5</strong><small id="clickBulk" class="muted"></small></div>
                   <button id="buyClick">購入</button>
                 </div>
               </div>
             </div>
 
+            <!-- Existing units -->
             <div class="shopitem">
               <div class="icon">🧝‍♂️</div>
               <div class="grow">
                 <h4>冒険者 <small id="advStatus">未雇用</small></h4>
                 <p>1秒に1回攻撃。1体ダメージ: <strong id="advDmg">5</strong> / Lv.<span id="advLv">0</span> / 数:<span id="advCount">0</span> / 総DPS:<span id="advDps">0</span></p>
                 <div class="row">
-                  <div class="kpi">💰 雇用コスト: <strong id="advHireCost">50</strong><small id="advHireBulk" class="muted"></small></div>
+                  <div class="kpi">💰 雇用: <strong id="advHireCost">50</strong><small id="advHireBulk" class="muted"></small></div>
                   <button id="hireAdv">雇う(+1)</button>
                 </div>
                 <div class="row">
-                  <div class="kpi">💰 強化コスト: <strong id="advUpCost">40</strong><small id="advUpBulk" class="muted"></small></div>
+                  <div class="kpi">💰 強化: <strong id="advUpCost">40</strong><small id="advUpBulk" class="muted"></small></div>
                   <button id="upAdv">強化</button>
                 </div>
               </div>
@@ -112,11 +119,11 @@
                 <h4>商人 <small id="merStatus">未雇用</small></h4>
                 <p>1秒にコイン獲得。1体CPS: <strong id="merCps">1</strong> / Lv.<span id="merLv">0</span> / 数:<span id="merCount">0</span> / 総CPS:<span id="merTotalCps">0</span></p>
                 <div class="row">
-                  <div class="kpi">💰 雇用コスト: <strong id="merHireCost">50</strong><small id="merHireBulk" class="muted"></small></div>
+                  <div class="kpi">💰 雇用: <strong id="merHireCost">50</strong><small id="merHireBulk" class="muted"></small></div>
                   <button id="hireMer">雇う(+1)</button>
                 </div>
                 <div class="row">
-                  <div class="kpi">💰 強化コスト: <strong id="merUpCost">40</strong><small id="merUpBulk" class="muted"></small></div>
+                  <div class="kpi">💰 強化: <strong id="merUpCost">40</strong><small id="merUpBulk" class="muted"></small></div>
                   <button id="upMer">強化</button>
                 </div>
               </div>
@@ -128,18 +135,117 @@
                 <h4>盗賊 <small id="thiStatus">未雇用</small></h4>
                 <p>0.2秒ごとに攻撃（高速）。1体ダメージ: <strong id="thiDmg">0.5</strong> / Lv.<span id="thiLv">0</span> / 数:<span id="thiCount">0</span> / 総DPS:<span id="thiDps">0</span></p>
                 <div class="row">
-                  <div class="kpi">💰 雇用コスト: <strong id="thiHireCost">50</strong><small id="thiHireBulk" class="muted"></small></div>
+                  <div class="kpi">💰 雇用: <strong id="thiHireCost">50</strong><small id="thiHireBulk" class="muted"></small></div>
                   <button id="hireThi">雇う(+1)</button>
                 </div>
                 <div class="row">
-                  <div class="kpi">💰 強化コスト: <strong id="thiUpCost">40</strong><small id="thiUpBulk" class="muted"></small></div>
+                  <div class="kpi">💰 強化: <strong id="thiUpCost">40</strong><small id="thiUpBulk" class="muted"></small></div>
                   <button id="upThi">強化</button>
                 </div>
               </div>
             </div>
+
+            <!-- New units -->
+            <div class="shopitem">
+              <div class="icon">🎵</div>
+              <div class="grow">
+                <h4>吟遊詩人（Bard） <small id="bardStatus">未雇用</small></h4>
+                <p>3秒ごとに歌。全体DPSに <strong>+1% × Lv</strong>（10秒、最大+50%）</p>
+                <div class="row">
+                  <div class="kpi">💰 雇用: <strong id="bardHireCost">80</strong><small id="bardHireBulk" class="muted"></small></div>
+                  <button id="hireBard">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化: <strong id="bardUpCost">60</strong><small id="bardUpBulk" class="muted"></small></div>
+                  <button id="upBard">強化</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🛡️</div>
+              <div class="grow">
+                <h4>パラディン（Paladin） <small id="palStatus">未雇用</small></h4>
+                <p>1秒/回で <strong>8 + 2×Lv</strong>。ボスへ <strong>×1.5</strong>／15秒ごとにボス時間 +1s（1戦+5s上限）</p>
+                <div class="row">
+                  <div class="kpi">💰 雇用: <strong id="palHireCost">150</strong><small id="palHireBulk" class="muted"></small></div>
+                  <button id="hirePal">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化: <strong id="palUpCost">90</strong><small id="palUpBulk" class="muted"></small></div>
+                  <button id="upPal">強化</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">⚗️</div>
+              <div class="grow">
+                <h4>アルケミスト（Alchemist） <small id="alcStatus">未雇用</small></h4>
+                <p>撃破コインに <strong>+1% × Lv</strong>。商人CPSに <strong>+0.5% × Lv</strong> 乗算</p>
+                <div class="row">
+                  <div class="kpi">💰 雇用: <strong id="alcHireCost">100</strong><small id="alcHireBulk" class="muted"></small></div>
+                  <button id="hireAlc">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化: <strong id="alcUpCost">80</strong><small id="alcUpBulk" class="muted"></small></div>
+                  <button id="upAlc">強化</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🥷</div>
+              <div class="grow">
+                <h4>ニンジャ（Ninja） <small id="ninStatus">未雇用</small></h4>
+                <p>0.1秒/回 <strong>0.35 + 0.15×Lv</strong>。自身のクリ率 <strong>+0.5% × Lv</strong></p>
+                <div class="row">
+                  <div class="kpi">💰 雇用: <strong id="ninHireCost">180</strong><small id="ninHireBulk" class="muted"></small></div>
+                  <button id="hireNin">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化: <strong id="ninUpCost">120</strong><small id="ninUpBulk" class="muted"></small></div>
+                  <button id="upNin">強化</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">💀</div>
+              <div class="grow">
+                <h4>ネクロマンサー（Necromancer） <small id="necStatus">未雇用</small></h4>
+                <p>討伐時に<strong>20% + 1%×Lv</strong>でスケルトン召喚（15秒/0.5秒ごとに <strong>1 + Lv</strong>）</p>
+                <div class="row">
+                  <div class="kpi">💰 雇用: <strong id="necHireCost">200</strong><small id="necHireBulk" class="muted"></small></div>
+                  <button id="hireNec">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化: <strong id="necUpCost">140</strong><small id="necUpBulk" class="muted"></small></div>
+                  <button id="upNec">強化</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🧘</div>
+              <div class="grow">
+                <h4>モンク（Monk） <small id="monStatus">未雇用</small></h4>
+                <p>コンボ上限 <strong>+0.05×Lv</strong>／減衰 <strong>-5%×Lv</strong>（下限0.1）</p>
+                <div class="row">
+                  <div class="kpi">💰 雇用: <strong id="monHireCost">90</strong><small id="monHireBulk" class="muted"></small></div>
+                  <button id="hireMon">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化: <strong id="monUpCost">70</strong><small id="monUpBulk" class="muted"></small></div>
+                  <button id="upMon">強化</button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
 
+        <!-- REBIRTH -->
         <div id="panelRebirth" style="display:none">
           <div class="shoplist">
             <div class="shopitem">
@@ -212,9 +318,45 @@
           <p class="hint" style="margin-top:8px">※ 転生すると、クリック攻撃力・雇用・強化はリセットされますが、「永続雇用」と「アーティファクト」「チャレンジ報酬」は維持されます。<br>※ 転生1回ごとに、与ダメージとコイン獲得が <strong>+10%</strong>（乗算）されます。</p>
         </div>
 
+        <!-- COLLECTION -->
+        <div id="panelCollection" style="display:none">
+          <div class="collection">
+            <section class="csec">
+              <h3>📚 所持アーティファクト＆恒久ボーナス</h3>
+              <div class="row">
+                <div>総数: <strong id="colArtCount">0</strong></div>
+                <div>💥 クリ率: <strong id="colArtCrit">0%</strong></div>
+                <div>⚔️ 与ダメ: <strong id="colArtDmg">0%</strong></div>
+                <div>🪙 獲得: <strong id="colArtCoin">0%</strong></div>
+              </div>
+              <div class="artlist" id="artifactList"></div>
+            </section>
+
+            <section class="csec">
+              <h3>🏅 実績＆称号</h3>
+              <div class="achwrap">
+                <div id="achList" class="achlist"></div>
+                <div class="titlebox">
+                  <label>装備中の称号</label>
+                  <select id="titleSelect"></select>
+                </div>
+              </div>
+            </section>
+
+            <section class="csec">
+              <h3>📦 永続雇用＆チャレンジ</h3>
+              <div class="row">
+                <div>永続：冒険者 <strong id="colPermAdv">0</strong> / 商人 <strong id="colPermMer">0</strong> / 盗賊 <strong id="colPermThi">0</strong></div>
+                <div>チャレンジ達成：<strong id="colChalDone">0</strong> 件（恒久+<span id="colChalBonus">0</span>%）</div>
+              </div>
+            </section>
+          </div>
+        </div>
+
         <div class="footer">
           <div class="hint">オートセーブ中… <span id="saveHint"></span></div>
           <div class="hint">表記: <strong id="fmtLabel">万/億</strong></div>
+          <div class="hint">ヘルプ: 1/2/3/4=購入数, B/A/M/T=強化/冒険者/商人/盗賊, R=転生タブ</div>
           <div>
             <button class="ghost" id="exportBtn">エクスポート</button>
             <button class="ghost" id="importBtn">インポート</button>

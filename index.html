@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>モンスター討伐クリッカー v4.2</title>
+  <title>モンスター討伐クリッカー v4.3</title>
   <style>
 :root{
   --bg:#0f1220; --panel:#171a2b; --panel-2:#1f2340; --accent:#6ee7ff; --accent-2:#ffd166; --danger:#ff6b6b; --ok:#95f9c3; --text:#edf2ff; --muted:#9aa3b2;
@@ -114,6 +114,16 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .ach .name{font-weight:700}
 .titlebox select{width:100%;background:#121633;color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:8px;padding:8px}
 
+
+/* --- v4.3 defensive CSS for overlays --- */
+.modal{display:none;pointer-events:none}
+.modal.show{display:flex;pointer-events:auto}
+[role="dialog"]:not(.show){display:none;pointer-events:none}
+#panic{display:none}
+#panic.show{display:flex}
+/* ensure main content clickable */
+body, .app, #root{pointer-events:auto}
+
 </style>
 </head>
 <body>
@@ -121,7 +131,7 @@ button:disabled{opacity:.5;cursor:not-allowed}
     <header class="header">
       <div class="brand">
         <h1>🗡️ モンスター討伐クリッカー <small id="playerTitle"></small></h1>
-        <div class="sub muted">v4.1: 実績・新ユニット・コレクション・UI刷新 + セーブ安定化</div>
+        <div class="sub muted">v4.3: 実績・新ユニット・コレクション・UI刷新 + セーブ安定化</div>
       </div>
       <div class="statbar">
         <div class="pill" title="所持コイン"><span>🪙</span><strong id="coins">0</strong></div>
@@ -501,7 +511,32 @@ button:disabled{opacity:.5;cursor:not-allowed}
   </div>
 
   <script>
-// bundled v4.2
+// bundled v4.3
+
+// --- v4.3 overlay guard ---
+(function(){
+  try{
+    const hideAccidentalOverlays = ()=>{
+      document.querySelectorAll('.modal, [role="dialog"]').forEach(el=>{
+        const style = window.getComputedStyle(el);
+        if(style.display !== 'none' && !el.classList.contains('show')){
+          el.style.display = 'none';
+          el.style.pointerEvents = 'none';
+        }
+      });
+      // overly high z-index full-screen blockers
+      Array.from(document.body.children).forEach(el=>{
+        const st = getComputedStyle(el);
+        if(st.position==='fixed' && parseInt(st.zIndex||'0',10) >= 9999 && st.display!=='none'){
+          el.style.pointerEvents='none';
+        }
+      });
+    };
+    if(document.readyState==='complete' || document.readyState==='interactive'){ hideAccidentalOverlays(); }
+    else document.addEventListener('DOMContentLoaded', hideAccidentalOverlays);
+  }catch(e){ console.warn('[overlay-guard]', e); }
+})();
+
 
 // ====== グローバルエラーハンドラ（原因を画面表示） ======
 (function(){

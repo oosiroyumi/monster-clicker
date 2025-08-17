@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>モンスタークリック診断ページ</title>
+  <style>
+    :root{--bg:#0f1220;--panel:#171a2b;--panel2:#1f2240;--text:#eef3ff;--muted:#9aa3b2;--ok:#95f9c3;--ng:#ff6b6b;--warn:#ffd166}
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(1200px 600px at 70% -20%,#1a2146 10%,#0f1220 65%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,'Hiragino Kaku Gothic ProN','Yu Gothic','Noto Sans JP',sans-serif}
+    .wrap{max-width:900px;margin:0 auto;padding:14px}
+    h1{margin:0 0 6px 0;font-size:20px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media (max-width:760px){.grid{grid-template-columns:1fr}}
+    .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 8px 26px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.06);padding:12px}
+    button{appearance:none;border:0;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer;color:#0d1020;background:#d6f0ff;margin-right:8px}
+    .pill{display:inline-flex;gap:8px;align-items:center;padding:8px 10px;border-radius:999px;background:#222853;border:1px solid rgba(255,255,255,.08);margin:4px 6px 0 0}
+    .ok{color:var(--ok)} .ng{color:var(--ng)} .warn{color:var(--warn)}
+    pre{white-space:pre-wrap;background:#0f1434;border:1px solid rgba(255,255,255,.12);padding:8px;border-radius:8px;max-height:50vh;overflow:auto;color:#dfe7ff}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧪 診断ページ（ボタンが反応しない時の切り分け）</h1>
+  <div class="grid">
+    <section class="card">
+      <h3>1) 即時チェック</h3>
+      <div id="status"></div>
+      <div style="margin-top:6px">
+        <button id="btnClick">クリック動作テスト</button>
+        <button id="btnTimer">setTimeout テスト</button>
+        <button id="btnStorage">Storage テスト</button>
+        <button id="btnAudio">Audio テスト</button>
+      </div>
+    </section>
+    <section class="card">
+      <h3>2) ログ</h3>
+      <pre id="log"></pre>
+    </section>
+  </div>
+</div>
+
+<script>
+(function(){
+  const logEl = document.getElementById('log');
+  function log(msg){ logEl.textContent += (new Date()).toLocaleTimeString() + ' ' + msg + '\n'; }
+
+  // 1) JS 実行 & イベント登録チェック
+  const status = document.getElementById('status');
+  function pill(txt, cls){ const s=document.createElement('span'); s.className='pill '+(cls||''); s.textContent=txt; status.appendChild(s); }
+
+  try{
+    pill('JS: OK','ok');
+    document.getElementById('btnClick').addEventListener('click', function(){
+      log('クリック OK');
+      this.textContent='OK! ('+Math.floor(Math.random()*999)+')';
+    });
+    document.getElementById('btnTimer').addEventListener('click', function(){
+      setTimeout(()=>{ log('setTimeout OK 500ms'); }, 500);
+      log('setTimeout スケジュール済み');
+    });
+  }catch(e){
+    pill('JS: NG','ng');
+    log('初期化エラー: '+(e&&e.message));
+  }
+
+  // 2) Storage テスト
+  document.getElementById('btnStorage').addEventListener('click', function(){
+    try{
+      const k='diag_'+Math.random().toString(36).slice(2);
+      localStorage.setItem(k,'1');
+      const v=localStorage.getItem(k);
+      localStorage.removeItem(k);
+      if(v==='1'){ log('localStorage OK'); pill('Storage: OK','ok'); }
+      else { log('localStorage 取得失敗'); pill('Storage: WARN','warn'); }
+    }catch(e){
+      log('localStorage 例外: '+e);
+      pill('Storage: NG','ng');
+    }
+  });
+
+  // 3) Audio テスト（ユーザー操作後のみ発音）
+  document.getElementById('btnAudio').addEventListener('click', async function(){
+    try{
+      const C = window.AudioContext||window.webkitAudioContext;
+      if(!C){ log('AudioContext なし'); pill('Audio: NG','ng'); return; }
+      const ctx = new C();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type='sine'; o.frequency.value=440; g.gain.value=0.05;
+      o.connect(g).connect(ctx.destination); o.start(); setTimeout(()=>{o.stop();ctx.close()}, 200);
+      log('Audio OK'); pill('Audio: OK','ok');
+    }catch(e){ log('Audio 例外: '+e); pill('Audio: NG','ng'); }
+  });
+
+  // 環境情報
+  log(navigator.userAgent);
+  log('language='+navigator.language+', platform='+(navigator.platform||'')+', online='+(navigator.onLine));
+  log('cookiesEnabled='+(navigator.cookieEnabled));
+  log('referrerPolicy='+document.referrer);
+  log('document.readyState='+document.readyState);
+})();
+</script>
+</body>
+</html>

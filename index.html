@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>モンスター討伐クリッカー</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>🗡️ モンスター討伐クリッカー</h1>
+      <div class="statbar">
+        <div class="pill" title="所持コイン"><span>🪙</span><strong id="coins">0</strong></div>
+        <div class="pill" title="転生コイン"><span>✨</span><strong id="rebirthCoins">0</strong></div>
+        <div class="pill" title="転生ボーナス"><span>📈</span><strong id="bonus">×1.00</strong></div>
+        <div class="pill" title="合計DPS"><span>⚔️</span><strong id="totalDps">0</strong></div>
+        <div class="pill" title="合計CPS"><span>⛏️</span><strong id="totalCps">0</strong></div>
+        <div class="pill" title="効果音 ON/OFF"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input id="soundToggle" type="checkbox" checked/>🔊SFX</label></div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="card monster-area">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center">
+          <div>Lv.<strong id="monsterLevel">1</strong></div>
+          <div id="monsterName" style="opacity:.8">スライム</div>
+          <div class="pill" title="今転生すると貰える転生コイン">
+            <span>予想 ✨</span><strong id="previewRebirth">0</strong>
+          </div>
+        </div>
+        <div class="monster-box" id="monsterBox" aria-label="モンスターを攻撃 (クリック)">
+          <div class="monster" id="monster">🟩</div>
+          <div class="floaters" id="floaters"></div>
+        </div>
+        <div class="hpwrap">
+          <div class="hpbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
+            <div class="hpfill" id="hpFill"></div>
+          </div>
+          <div class="hplabel"><span>HP: <strong id="hpNum">8 / 8</strong></span><span id="reward">討伐報酬: 5🪙</span></div>
+        </div>
+        <div class="controls">
+          <button id="attackBtn">攻撃（クリック または Space）</button>
+          <button id="rebirthBtn" class="secondary" disabled>転生（Lv50〜）</button>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div class="shop-tabs">
+          <div class="tab active" id="tabShop">ショップ</div>
+          <div class="tab" id="tabRebirth">転生ショップ</div>
+        </div>
+
+        <div id="panelShop">
+          <div class="row qtybar">
+            <div class="seg">
+              <button id="qty1" class="active">×1</button>
+              <button id="qty10">×10</button>
+              <button id="qty100">×100</button>
+              <button id="qtyMax">MAX</button>
+            </div>
+          </div>
+          <div class="shoplist">
+            <div class="shopitem">
+              <div class="icon">🗡️</div>
+              <div class="grow">
+                <h4>攻撃力 強化 <small id="clickLv">Lv.1</small></h4>
+                <p>クリック攻撃力を +1。現在: <strong id="clickDmg">1</strong></p>
+                <div class="row">
+                  <div class="kpi">💰 コスト: <strong id="clickCost">10</strong><small id="clickBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <button id="buyClick">購入</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🧝‍♂️</div>
+              <div class="grow">
+                <h4>冒険者 <small id="advStatus">未雇用</small></h4>
+                <p>1秒に1回攻撃。1体ダメージ: <strong id="advDmg">5</strong> / Lv.<span id="advLv">0</span> / 数:<span id="advCount">0</span> / 総DPS:<span id="advDps">0</span></p>
+                <div class="row">
+                  <div class="kpi">💰 雇用コスト: <strong id="advHireCost">50</strong><small id="advHireBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <button id="hireAdv">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化コスト: <strong id="advUpCost">40</strong><small id="advUpBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <button id="upAdv">強化</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🧳</div>
+              <div class="grow">
+                <h4>商人 <small id="merStatus">未雇用</small></h4>
+                <p>1秒にコイン獲得。1体CPS: <strong id="merCps">1</strong> / Lv.<span id="merLv">0</span> / 数:<span id="merCount">0</span> / 総CPS:<span id="merTotalCps">0</span></p>
+                <div class="row">
+                  <div class="kpi">💰 雇用コスト: <strong id="merHireCost">50</strong><small id="merHireBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <button id="hireMer">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化コスト: <strong id="merUpCost">40</strong><small id="merUpBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <button id="upMer">強化</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🗡️🦊</div>
+              <div class="grow">
+                <h4>盗賊 <small id="thiStatus">未雇用</small></h4>
+                <p>0.2秒ごとに攻撃（高速）。1体ダメージ: <strong id="thiDmg">0.5</strong> / Lv.<span id="thiLv">0</span> / 数:<span id="thiCount">0</span> / 総DPS:<span id="thiDps">0</span></p>
+                <div class="row">
+                  <div class="kpi">💰 雇用コスト: <strong id="thiHireCost">50</strong><small id="thiHireBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <button id="hireThi">雇う(+1)</button>
+                </div>
+                <div class="row">
+                  <div class="kpi">💰 強化コスト: <strong id="thiUpCost">40</strong><small id="thiUpBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <button id="upThi">強化</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="panelRebirth" style="display:none">
+          <div class="shoplist">
+            <div class="shopitem">
+              <div class="icon">🧝‍♂️✨</div>
+              <div class="grow">
+                <h4>永続雇用：冒険者</h4>
+                <p>転生後も冒険者が自動で雇用された状態になります（基礎値から）。</p>
+                <div class="row">
+                  <div class="kpi">✨ コスト: <strong id="permAdvCost">1</strong></div>
+                  <div class="kpi">保有数: <strong id="permAdvOwned">0</strong></div>
+                  <button id="buyPermAdv">購入(+1)</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🧳✨</div>
+              <div class="grow">
+                <h4>永続雇用：商人</h4>
+                <p>転生後も商人が自動で雇用された状態になります（基礎値から）。</p>
+                <div class="row">
+                  <div class="kpi">✨ コスト: <strong id="permMerCost">1</strong></div>
+                  <div class="kpi">保有数: <strong id="permMerOwned">0</strong></div>
+                  <button id="buyPermMer">購入(+1)</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="shopitem">
+              <div class="icon">🗡️🦊✨</div>
+              <div class="grow">
+                <h4>永続雇用：盗賊</h4>
+                <p>転生後も盗賊が自動で雇用された状態になります（基礎値から）。</p>
+                <div class="row">
+                  <div class="kpi">✨ コスト: <strong id="permThiCost">1</strong></div>
+                  <div class="kpi">保有数: <strong id="permThiOwned">0</strong></div>
+                  <button id="buyPermThi">購入(+1)</button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          <p class="hint" style="margin-top:8px">※ 転生すると、クリック攻撃力・雇用・強化はリセットされますが、上記の「永続雇用」購入分は維持されます。<br>※ 転生1回ごとに、与ダメージとコイン獲得が <strong>+10%</strong>（乗算）されます。</p>
+        </div>
+
+        <div class="footer">
+          <div class="hint">オートセーブ中… <span id="saveHint"></span></div>
+          <div>
+            <button class="ghost" id="exportBtn">エクスポート</button>
+            <button class="ghost" id="importBtn">インポート</button>
+            <button class="ghost danger" id="hardResetBtn">データ初期化</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Reset Confirm Modal -->
+  <div id="resetModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+    <div class="box">
+      <h3 id="resetTitle">データ初期化の確認</h3>
+      <p>保存データ（現行＆旧版）の削除とページ再読み込みを行います。この操作は取り消せません。本当に初期化しますか？</p>
+      <div class="actions">
+        <button id="cancelReset" class="ghost">キャンセル</button>
+        <button id="confirmReset" class="danger">初期化する</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="main.js" defer></script>
+</body>
+</html>

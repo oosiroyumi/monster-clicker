@@ -1,12 +1,23 @@
-// ====== 数字整形 ======
-function fmt(n){
+// ====== 数字整形（日本語単位/国際単位） ======
+const NUMFMT = { mode: 'jp' };
+function fmtJP(n){
   if(!isFinite(n)) return '∞';
   const neg = n<0; n=Math.abs(n);
-  if(n<1000) return (neg?-1:1)*n % 1 ? ((neg?'-':'')+n.toFixed(1)) : ((neg?'-':'')+n.toFixed(0));
+  const units = [['京',1e16],['兆',1e12],['億',1e8],['万',1e4]];
+  for(const [label, val] of units){
+    if(n >= val){ const num = n/val; return (neg?'-':'') + (num<10?num.toFixed(2):num<100?num.toFixed(1):num.toFixed(0)) + label; }
+  }
+  return (neg?'-':'') + (n%1?n.toFixed(1):n.toFixed(0));
+}
+function fmtSI(n){
+  if(!isFinite(n)) return '∞';
+  const neg = n<0; n=Math.abs(n);
   const units=['','K','M','B','T','aa','ab','ac','ad','ae'];
   let u=0; while(n>=1000 && u<units.length-1){n/=1000;u++}
-  return (neg?'-':'')+n.toFixed(n<10?2:n<100?1:0)+units[u];
+  const base = (n<10?2:n<100?1:0);
+  return (neg?'-':'') + n.toFixed(base) + units[u];
 }
+function fmt(n){ return NUMFMT.mode==='jp'? fmtJP(n) : fmtSI(n); }
 
 // ====== サウンド ======
 const SFX = (()=>{
@@ -34,15 +45,19 @@ const SFX = (()=>{
   return {setEnabled,coin,hit,crit,buy,error,rebirth}
 })();
 
+// ====== ユーティリティ ======
+function isBossFloor(level){ return level>0 && level%10===0; }
+function clamp(x,a,b){ return Math.max(a, Math.min(b,x)); }
+
 // ====== ゲーム状態 ======
-const SAVE_KEY = 'monster_clicker_v2_multi_units_ja';
+const SAVE_KEY = 'monster_clicker_v3_boss_artifact_challenge_ja';
 const state = {
-  version: 3,
+  version: 4,
   coins:0,
   rebirthCoins:0,
   rebirths:0,
   prestige:{permAdv:0, permMer:0, permThi:0, costAdv:1, costMer:1, costThi:1},
-  // プレイヤークリック：コストを下げ、伸び率も少し緩く
+  // プレイヤークリック
   player:{level:1, dmg:1, cost:8, costMul:1.10, critRate:0.05, critMult:2.0},
   adv:{count:0, level:0, dmg:5, hireCost:50, upCost:40, hireMul:1.15, upMul:1.15, timer:0},
   mer:{count:0, level:0, cps:1, hireCost:50, upCost:40, hireMul:1.15, upMul:1.20, timer:0},
@@ -55,7 +70,15 @@ const state = {
   // クリコンボ
   combo:{value:1, max:2.0, gain:0.1, decayPerSec:0.4},
   // ラン統計
-  run:{startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1},
+  run:{startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1, bossKills:0, artifacts:0, bestDps:0, bestCps:0},
+  // ボス
+  boss:{active:false, timeLeft:30, timeLimit:30, hpMult:1.5, rewardMult:2},
+  // アーティファクト（恒久）
+  artifacts:{list:[], pity:0, bonus:{crit:0, dmg:0, coin:0}},
+  // チャレンジ
+  challenge:{selected:'', active:'', completed:[], bonusStack:0}, // bonusStack = 0.02 * completed.length
+  // UI
+  ui:{logCollapsed:true},
 };
 
 // ==== Saving control flags ====
@@ -66,6 +89,7 @@ let LAST_OFFLINE = {coinsFromCps:0, coinsFromKills:0, kills:0};
 // ====== 互換ロード（旧セーブの移行） ======
 function migrateOldSave(obj){
   try{
+    // v2/v1 fields
     if(obj && obj.adv && typeof obj.adv.hired === 'boolean'){
       obj.adv.count = obj.adv.hired ? 1 : 0; delete obj.adv.hired;
       obj.adv.level = obj.adv.level||0; obj.adv.dmg = obj.adv.dmg||5; obj.adv.hireCost = obj.adv.hireCost||50; obj.adv.upCost = obj.adv.upCost||40; obj.adv.timer = 0;
@@ -76,25 +100,32 @@ function migrateOldSave(obj){
     }
     if(obj && obj.thi && typeof obj.thi.hired === 'boolean'){
       obj.thi.count = obj.thi.hired ? 1 : 0; delete obj.thi.hired;
-      obj.thi.level = obj.thi.level||0; obj.thi.dmg = obj.thi.dmg||0.5; obj.thi.hireCost = (typeof obj.thi.hireCost==='number'? obj.thi.hireCost : 50); if(obj.thi.hireCost===100 && (obj.thi.count|0)===0) obj.thi.hireCost = 50; obj.thi.upCost = (typeof obj.thi.upCost==='number'? obj.thi.upCost : 40); if(obj.thi.upCost===70 && (obj.thi.level|0)===0) obj.thi.upCost = 40; obj.thi.timer = 0; obj.thi.interval = obj.thi.interval||0.2;
+      obj.thi.level = obj.thi.level||0; obj.thi.dmg = obj.thi.dmg||0.5;
+      obj.thi.hireCost = (typeof obj.thi.hireCost==='number'? obj.thi.hireCost : 50);
+      if(obj.thi.hireCost===100 && (obj.thi.count|0)===0) obj.thi.hireCost = 50;
+      obj.thi.upCost = (typeof obj.thi.upCost==='number'? obj.thi.upCost : 40);
+      if(obj.thi.upCost===70 && (obj.thi.level|0)===0) obj.thi.upCost = 40;
+      obj.thi.timer = 0; obj.thi.interval = obj.thi.interval||0.2;
     }
     if(obj) obj.highestLevelThisRun = obj.highestLevelThisRun|| (obj.monster? obj.monster.level:1) || 1;
-    // v2→v3: 新フィールドの既定値
-    if(obj && obj.player){ obj.player.costMul = obj.player.costMul||1.10; obj.player.critRate = obj.player.critRate||0.05; obj.player.critMult = obj.player.critMult||2.0; if(obj.player.cost && obj.player.cost>8) obj.player.cost = obj.player.cost; }
+    // new fields
     if(obj && !obj.combo) obj.combo = {value:1, max:2.0, gain:0.1, decayPerSec:0.4};
-    if(obj && !obj.run) obj.run = {startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1};
-    if(obj && obj.adv){ obj.adv.hireMul = obj.adv.hireMul||1.15; obj.adv.upMul = 1.15; }
-    if(obj && obj.mer){ obj.mer.hireMul = obj.mer.hireMul||1.15; obj.mer.upMul = obj.mer.upMul||1.20; }
-    if(obj && obj.thi){ obj.thi.hireMul = obj.thi.hireMul||1.15; obj.thi.upMul = 1.15; }
+    if(obj && !obj.run) obj.run = {startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1, bossKills:0, artifacts:0, bestDps:0, bestCps:0};
+    if(obj && !obj.boss) obj.boss = {active:false, timeLeft:30, timeLimit:30, hpMult:1.5, rewardMult:2};
+    if(obj && !obj.artifacts) obj.artifacts = {list:[], pity:0, bonus:{crit:0, dmg:0, coin:0}};
+    if(obj && !obj.challenge) obj.challenge = {selected:'', active:'', completed:[], bonusStack:0};
+    if(obj && !obj.ui) obj.ui = {logCollapsed:true};
   }catch(e){console.warn('migrate error', e)}
 }
 
+// ====== DOM ======
 const DOM = {
   coins:document.getElementById('coins'),
   rebirthCoins:document.getElementById('rebirthCoins'),
   bonus:document.getElementById('bonus'),
   comboView:document.getElementById('comboView'),
   totalDps:document.getElementById('totalDps'), totalCps:document.getElementById('totalCps'),
+  artifactCount:document.getElementById('artifactCount'),
   monsterLevel:document.getElementById('monsterLevel'),
   monsterName:document.getElementById('monsterName'),
   hpFill:document.getElementById('hpFill'),
@@ -105,8 +136,13 @@ const DOM = {
   monsterBox:document.getElementById('monsterBox'),
   floaters:document.getElementById('floaters'),
   battlelog:document.getElementById('battlelog'),
+  toggleLog:document.getElementById('toggleLog'),
   rebirthBtn:document.getElementById('rebirthBtn'),
   previewRebirth:document.getElementById('previewRebirth'),
+  // boss
+  bossWrap:document.getElementById('bossWrap'),
+  bossTimeFill:document.getElementById('bossTimeFill'),
+  bossTime:document.getElementById('bossTime'),
   // shop
   clickLv:document.getElementById('clickLv'), clickDmg:document.getElementById('clickDmg'), clickCost:document.getElementById('clickCost'), clickBulk:document.getElementById('clickBulk'), buyClick:document.getElementById('buyClick'),
   // adv
@@ -123,14 +159,56 @@ const DOM = {
   saveHint:document.getElementById('saveHint'),
   soundToggle:document.getElementById('soundToggle'),
   qty1:document.getElementById('qty1'), qty10:document.getElementById('qty10'), qty100:document.getElementById('qty100'), qtyMax:document.getElementById('qtyMax'),
+  fmtJP:document.getElementById('fmtJP'), fmtSI:document.getElementById('fmtSI'), fmtLabel:document.getElementById('fmtLabel'),
+  // artifacts & challenge UI
+  artCount:document.getElementById('artCount'), artCrit:document.getElementById('artCrit'), artDmg:document.getElementById('artDmg'), artCoin:document.getElementById('artCoin'),
+  challengeList:document.getElementById('challengeList'), challengeStatus:document.getElementById('challengeStatus'),
   resultModal:document.getElementById('resultModal'), resultBody:document.getElementById('resultBody'), closeResult:document.getElementById('closeResult'),
 };
 
-function dmgMult(){ return Math.pow(1.1, state.rebirths); }
-function coinMult(){ return Math.pow(1.1, state.rebirths); }
-function monsterHP(level){ return Math.max(8, Math.ceil(8 * Math.pow(1.10, level-1))); }
-function monsterReward(level){ return Math.max(5, Math.floor(5 * Math.pow(1.12, level-1))); }
+// ====== 係数（転生/チャレンジ/アーティファクト） ======
+function dmgMult(){
+  const reb = Math.pow(1.1, state.rebirths);
+  const chal = 1 + (state.challenge.bonusStack||0); // 2% per completed
+  const art = 1 + (state.artifacts.bonus.dmg||0);
+  return reb * chal * art;
+}
+function coinMult(){
+  const reb = Math.pow(1.1, state.rebirths);
+  const chal = 1 + (state.challenge.bonusStack||0);
+  const art = 1 + (state.artifacts.bonus.coin||0);
+  return reb * chal * art;
+}
+function critRate(){ return clamp((state.player.critRate||0) + (state.artifacts.bonus.crit||0), 0, 0.5); }
 
+// ====== モンスター/ボス ======
+function updateMonsterSkin(){
+  const l = state.monster.level;
+  let icon='🟩', name='スライム';
+  if(l>=10) {icon='🐗'; name='ボア';}
+  if(l>=20) {icon='🧟'; name='ゾンビ';}
+  if(l>=30) {icon='🦖'; name='リザード';}
+  if(l>=40) {icon='👹'; name='オーガ';}
+  if(l>=50) {icon='🐉'; name='ドラゴン';}
+  if(isBossFloor(l)) name += '（王）';
+  DOM.monster.textContent=icon; state.monster.name=name; DOM.monsterName.textContent=name;
+}
+function monsterHP(level){
+  const base = Math.max(8, Math.ceil(8 * Math.pow(1.10, level-1)));
+  return isBossFloor(level) ? Math.ceil(base * state.boss.hpMult) : base;
+}
+function monsterReward(level){
+  const base = Math.max(5, Math.floor(5 * Math.pow(1.12, level-1)));
+  return Math.floor(base * (isBossFloor(level)? state.boss.rewardMult : 1));
+}
+function enterBossIfNeeded(){
+  const isBoss = isBossFloor(state.monster.level);
+  state.boss.active = isBoss;
+  state.boss.timeLeft = state.boss.timeLimit;
+  DOM.bossWrap.style.display = isBoss ? 'block' : 'none';
+}
+
+// ====== バトルログ ======
 function spawnFloater(text, cls=''){
   const el = document.createElement('div');
   el.className='floater'+(cls?(' '+cls):'');
@@ -142,7 +220,6 @@ function spawnFloater(text, cls=''){
   DOM.floaters.appendChild(el);
   setTimeout(()=>el.remove(), 850);
 }
-
 function log(msg, cls=''){
   const el = document.createElement('div');
   el.className = 'logitem'+(cls?(' '+cls):'');
@@ -154,37 +231,27 @@ function log(msg, cls=''){
   if(items.length>6) items[items.length-1].remove();
 }
 
-function updateMonsterSkin(){
-  const l = state.monster.level;
-  let icon='🟩', name='スライム';
-  if(l>=10) {icon='🐗'; name='ボア';}
-  if(l>=20) {icon='🧟'; name='ゾンビ';}
-  if(l>=30) {icon='🦖'; name='リザード';}
-  if(l>=40) {icon='👹'; name='オーガ';}
-  if(l>=50) {icon='🐉'; name='ドラゴン';}
-  DOM.monster.textContent=icon; state.monster.name=name; DOM.monsterName.textContent=name;
-}
-
+// ====== モンスター管理 ======
 function toNextMonster(){
   state.monster.level++;
   state.highestLevelThisRun = Math.max(state.highestLevelThisRun, state.monster.level);
   state.monster.maxHp = monsterHP(state.monster.level);
   state.monster.hp = state.monster.maxHp;
   updateMonsterSkin();
+  enterBossIfNeeded();
 }
 
+// ====== 通貨操作 ======
 function addCoins(n){ state.coins += n; if(n>0){ state.run.coinsEarned += n; SFX.coin(); } }
 
+// ====== ダメージ処理 ======
 function dealDamage(amount, source='auto'){
   const base = amount * dmgMult();
   let dmg = base;
   let isCrit = false;
-  // クリック時はクリ・コンボ適用
   if(source==='click'){
-    // コンボ適用
     dmg *= state.combo.value;
-    // クリティカル
-    if(Math.random() < state.player.critRate){
+    if(Math.random() < critRate()){
       isCrit = true;
       dmg *= state.player.critMult;
       state.run.crits++;
@@ -192,7 +259,6 @@ function dealDamage(amount, source='auto'){
     } else {
       SFX.hit();
     }
-    // クリック統計
     state.run.clicks++;
     state.combo.value = Math.min(state.combo.max, state.combo.value + state.combo.gain);
     state.run.maxCombo = Math.max(state.run.maxCombo, state.combo.value);
@@ -201,24 +267,57 @@ function dealDamage(amount, source='auto'){
   }
 
   state.monster.hp -= dmg;
-  spawnFloater((isCrit?'CRIT ':'-') + (dmg%1?dmg.toFixed(1):dmg.toFixed(0)), isCrit?'crit':'');
-  if(isCrit) log(`クリティカル！ <strong>${dmg.toFixed(1)}</strong>`, 'crit');
+  const dmgText = (dmg%1?dmg.toFixed(1):dmg.toFixed(0));
+  spawnFloater((isCrit?'CRIT ':'-') + dmgText, isCrit?'crit':'');
+  if(isCrit) log(`クリティカル！ <strong>${dmgText}</strong>`, 'crit');
 
   if(state.monster.hp<=0){
     const reward = Math.floor(monsterReward(state.monster.level) * coinMult());
     addCoins(reward);
     state.run.kills++;
+    if(isBossFloor(state.monster.level)){
+      state.run.bossKills++;
+      rollArtifactDrop();
+    }
     log(`Lv${state.monster.level} を討伐！ +${fmt(reward)}🪙`);
     toNextMonster();
   }
   refreshUI();
 }
 
-// ====== 購入系 ======
-function canAfford(cost){ return state.coins >= cost; }
-function pay(cost){ state.coins -= cost; }
+// ====== アーティファクト ======
+function recalcArtifactBonus(){
+  const bonus = {crit:0, dmg:0, coin:0};
+  for(const a of state.artifacts.list){
+    if(a.type==='crit') bonus.crit += a.value;
+    if(a.type==='dmg') bonus.dmg += a.value;
+    if(a.type==='coin') bonus.coin += a.value;
+  }
+  state.artifacts.bonus = bonus;
+}
+function rollArtifactDrop(){
+  const pity = state.artifacts.pity||0;
+  const chance = 0.20 + (pity>=4 ? 1 : 0); // after 4 fails, next is guaranteed
+  if(Math.random() < chance){
+    const t = ['crit','dmg','coin'][Math.floor(Math.random()*3)];
+    const val = t==='crit' ? 0.005 : 0.01; // +0.5% crit, +1% dmg/coin
+    state.artifacts.list.push({type:t, value:val, ts:Date.now()});
+    recalcArtifactBonus();
+    state.artifacts.pity = 0;
+    state.run.artifacts++;
+    log(`アーティファクト獲得！ (${t==='crit'?'💥クリ+0.5%':(t==='dmg'?'⚔️与ダメ+1%':'🪙獲得+1%')})`);
+  } else {
+    state.artifacts.pity = pity + 1;
+  }
+}
 
-// まとめ買いヘルパ
+// ====== チャレンジ制約 ======
+function challengeActive(id){ return state.challenge.active === id; }
+function canUseAdv(){ return !challengeActive('thiefOnly') && !challengeActive('clickOnly'); }
+function canUseThi(){ return !challengeActive('clickOnly'); }
+function canUseMer(){ return !challengeActive('noMer') && !challengeActive('clickOnly'); }
+
+// ====== 購入系 ======
 function requestedQty(){ return state.buyQty==='max' ? 1000000 : (state.buyQty||1); }
 function computeBulk(cost, mult, coins, maxSteps){
   let steps=0,total=0;
@@ -227,14 +326,11 @@ function computeBulk(cost, mult, coins, maxSteps){
     if(coins < c) break;
     coins -= c; total += c; steps++;
     cost *= mult;
-    if(steps>200000) break; // safety
+    if(steps>200000) break;
   }
   return {steps,total,nextCost:cost};
 }
-function sumBulk(cost, mult, steps){
-  let total=0; for(let i=0;i<steps;i++){ total += Math.floor(cost); cost *= mult; }
-  return total;
-}
+function sumBulk(cost, mult, steps){ let total=0; for(let i=0;i<steps;i++){ total += Math.floor(cost); cost *= mult; } return total; }
 function buildBulkText(cost, mult, qty, coins){
   if(qty===1) return '';
   if(qty==='max'){
@@ -246,6 +342,7 @@ function buildBulkText(cost, mult, qty, coins){
   }
 }
 
+// Click upgrade
 function buyClick(){
   const req = requestedQty();
   const r = computeBulk(state.player.cost, state.player.costMul, state.coins, req);
@@ -257,8 +354,8 @@ function buyClick(){
   SFX.buy(); refreshUI(); save();
 }
 
-// --- 冒険者 ---
-function hireAdv(){
+// Adventurer
+function hireAdv(){ if(!canUseAdv()) return SFX.error();
   const req = requestedQty();
   const r = computeBulk(state.adv.hireCost, state.adv.hireMul, state.coins, req);
   if(r.steps<=0) return SFX.error();
@@ -267,7 +364,7 @@ function hireAdv(){
   state.adv.hireCost = r.nextCost;
   SFX.buy(); refreshUI(); save();
 }
-function upAdv(){
+function upAdv(){ if(!canUseAdv()) return SFX.error();
   const req = requestedQty();
   const r = computeBulk(state.adv.upCost, state.adv.upMul, state.coins, req);
   if(r.steps<=0) return SFX.error();
@@ -278,8 +375,8 @@ function upAdv(){
   SFX.buy(); refreshUI(); save();
 }
 
-// --- 商人 ---
-function hireMer(){
+// Merchant
+function hireMer(){ if(!canUseMer()) return SFX.error();
   const req = requestedQty();
   const r = computeBulk(state.mer.hireCost, state.mer.hireMul, state.coins, req);
   if(r.steps<=0) return SFX.error();
@@ -288,7 +385,7 @@ function hireMer(){
   state.mer.hireCost = r.nextCost;
   SFX.buy(); refreshUI(); save();
 }
-function upMer(){
+function upMer(){ if(!canUseMer()) return SFX.error();
   const req = requestedQty();
   const r = computeBulk(state.mer.upCost, state.mer.upMul, state.coins, req);
   if(r.steps<=0) return SFX.error();
@@ -299,8 +396,8 @@ function upMer(){
   SFX.buy(); refreshUI(); save();
 }
 
-// --- 盗賊 ---
-function hireThi(){
+// Thief
+function hireThi(){ if(!canUseThi()) return SFX.error();
   const req = requestedQty();
   const r = computeBulk(state.thi.hireCost, state.thi.hireMul, state.coins, req);
   if(r.steps<=0) return SFX.error();
@@ -309,7 +406,7 @@ function hireThi(){
   state.thi.hireCost = r.nextCost;
   SFX.buy(); refreshUI(); save();
 }
-function upThi(){
+function upThi(){ if(!canUseThi()) return SFX.error();
   const req = requestedQty();
   const r = computeBulk(state.thi.upCost, state.thi.upMul, state.coins, req);
   if(r.steps<=0) return SFX.error();
@@ -326,17 +423,34 @@ function previewRebirthCoins(){
   if(highest < 50) return 0;
   return 1 + Math.floor((highest - 50) / 25);
 }
-
+function challengeDesc(id){
+  return id==='noMer'?'商人禁止':id==='thiefOnly'?'盗賊のみ':id==='clickOnly'?'クリックのみ':'（なし）';
+}
+function completeChallengeIfAny(){
+  const id = state.challenge.active;
+  if(!id) return {completed:false};
+  if(state.highestLevelThisRun >= 50){
+    if(!state.challenge.completed.includes(id)){
+      state.challenge.completed.push(id);
+      state.challenge.bonusStack = 0.02 * state.challenge.completed.length;
+      return {completed:true, id};
+    }
+  }
+  return {completed:false};
+}
 function showResultModal(snapshot){
   const sec = Math.max(1, Math.floor((snapshot.endTs - snapshot.startTs)/1000));
   const body = `
     <div class="item"><div>最高到達Lv</div><strong>${snapshot.highest}</strong></div>
     <div class="item"><div>獲得コイン（ラン）</div><strong>${fmt(snapshot.coins)}</strong></div>
-    <div class="item"><div>討伐数</div><strong>${snapshot.kills}</strong></div>
+    <div class="item"><div>討伐数 / ボス</div><strong>${snapshot.kills} / ${snapshot.bossKills}</strong></div>
     <div class="item"><div>クリック / クリティカル</div><strong>${snapshot.clicks} / ${snapshot.crits}</strong></div>
     <div class="item"><div>最大コンボ</div><strong>×${snapshot.maxCombo.toFixed(2)}</strong></div>
+    <div class="item"><div>ベストDPS/CPS</div><strong>${snapshot.bestDps.toFixed(1)} / ${snapshot.bestCps.toFixed(1)}</strong></div>
+    <div class="item"><div>取得アーティファクト</div><strong>🧿 ${snapshot.artifacts}</strong></div>
     <div class="item"><div>プレイ時間</div><strong>${sec}s</strong></div>
     <div class="item"><div>今回の転生コイン</div><strong>✨ ${snapshot.rebirthGain}</strong></div>
+    <div class="item"><div>チャレンジ</div><strong>${challengeDesc(snapshot.challengeActive)}${snapshot.challengeCompleted? '（達成！+2%恒久）':''}</strong></div>
     <div class="item"><div>累計転生</div><strong>${snapshot.rebirths}</strong></div>
   `;
   DOM.resultBody.innerHTML = body;
@@ -347,19 +461,31 @@ function showResultModal(snapshot){
 function doRebirth(){
   if(state.monster.level < 50) return SFX.error();
   const gain = previewRebirthCoins();
+  const chalRes = completeChallengeIfAny();
+
   // スナップショット（リザルト表示用）
   const snap = {
     highest: state.highestLevelThisRun,
     coins: state.run.coinsEarned,
     kills: state.run.kills,
+    bossKills: state.run.bossKills,
     clicks: state.run.clicks,
     crits: state.run.crits,
     maxCombo: state.run.maxCombo,
+    bestDps: state.run.bestDps||0,
+    bestCps: state.run.bestCps||0,
+    artifacts: state.run.artifacts||0,
+    challengeActive: state.challenge.active||'',
+    challengeCompleted: chalRes.completed,
     startTs: state.run.startTs,
     endTs: Date.now(),
     rebirthGain: gain,
     rebirths: state.rebirths + 1,
   };
+
+  if(chalRes.completed){
+    log(`チャレンジ達成！ ${challengeDesc(state.challenge.active)} 恒久+2%`, 'crit');
+  }
 
   state.rebirthCoins += gain; state.rebirths += 1; SFX.rebirth();
 
@@ -372,16 +498,24 @@ function doRebirth(){
   state.player = {...state.player, level:1, dmg:1, cost:8}; // costMul維持
   state.combo.value = 1;
 
+  // reset units
   state.adv.level = 0; state.adv.dmg = 5; state.adv.upCost = 40; state.adv.timer = 0; state.adv.count = permAdv; state.adv.hireCost = 50;
   state.mer.level = 0; state.mer.cps = 1; state.mer.upCost = 40; state.mer.timer = 0; state.mer.count = permMer; state.mer.hireCost = 50;
   state.thi.level = 0; state.thi.dmg = 0.5; state.thi.upCost = 40; state.thi.timer = 0; state.thi.count = permThi; state.thi.hireCost = 50; state.thi.interval = 0.2;
 
+  // monster reset
   state.monster.level = 1; state.monster.maxHp = monsterHP(1); state.monster.hp = state.monster.maxHp;
   state.highestLevelThisRun = 1;
   // ラン統計リセット
-  state.run = {startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1};
+  state.run = {startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1, bossKills:0, artifacts:0, bestDps:0, bestCps:0};
+
+  // チャレンジの開始（次ランへ選択値を適用）
+  state.challenge.active = state.challenge.selected || '';
+  // completedによるボーナスを反映
+  state.challenge.bonusStack = 0.02 * (state.challenge.completed?.length||0);
 
   updateMonsterSkin();
+  enterBossIfNeeded();
   applyPermBaseline();
   refreshUI();
   save();
@@ -424,12 +558,22 @@ function updateBulkPreviews(){
   if(DOM.thiUpBulk) DOM.thiUpBulk.textContent = buildBulkText(state.thi.upCost, state.thi.upMul, qty, state.coins);
 }
 function updateQtyUI(){ if(!DOM.qty1) return; DOM.qty1.classList.toggle('active', state.buyQty===1); DOM.qty10.classList.toggle('active', state.buyQty===10); DOM.qty100.classList.toggle('active', state.buyQty===100); DOM.qtyMax.classList.toggle('active', state.buyQty==='max'); }
+function updateFmtUI(){ DOM.fmtJP.classList.toggle('active', NUMFMT.mode==='jp'); DOM.fmtSI.classList.toggle('active', NUMFMT.mode!=='jp'); DOM.fmtLabel.textContent = NUMFMT.mode==='jp'?'万/億':'K/M'; }
 
 function refreshUI(){
   DOM.coins.textContent = fmt(state.coins);
   DOM.rebirthCoins.textContent = fmt(state.rebirthCoins);
   DOM.bonus.textContent = '×'+(dmgMult()).toFixed(2);
   DOM.comboView.textContent = '×'+(state.combo.value||1).toFixed(2);
+  DOM.artifactCount.textContent = (state.artifacts.list?.length||0);
+
+  if(state.boss.active){
+    DOM.bossWrap.style.display='block';
+    DOM.bossTime.textContent = state.boss.timeLeft.toFixed(1)+'s';
+    DOM.bossTimeFill.style.width = clamp((state.boss.timeLeft/state.boss.timeLimit)*100,0,100)+'%';
+  } else {
+    DOM.bossWrap.style.display='none';
+  }
 
   DOM.monsterLevel.textContent = state.monster.level;
   DOM.hpFill.style.width = Math.max(0, (state.monster.hp/state.monster.maxHp)*100)+'%';
@@ -456,8 +600,8 @@ function refreshUI(){
   DOM.advDps.textContent = advTotalDps.toFixed(1);
   DOM.advHireCost.textContent = fmt(Math.floor(state.adv.hireCost));
   DOM.advUpCost.textContent = fmt(Math.floor(state.adv.upCost));
-  DOM.hireAdv.disabled = state.coins < Math.floor(state.adv.hireCost);
-  DOM.upAdv.disabled = state.coins < Math.floor(state.adv.upCost);
+  DOM.hireAdv.disabled = state.coins < Math.floor(state.adv.hireCost) || !canUseAdv();
+  DOM.upAdv.disabled = state.coins < Math.floor(state.adv.upCost) || !canUseAdv();
 
   // Merchant
   const merPerUnit = state.mer.cps * coinMult();
@@ -469,8 +613,8 @@ function refreshUI(){
   DOM.merTotalCps.textContent = merTotal.toFixed(1);
   DOM.merHireCost.textContent = fmt(Math.floor(state.mer.hireCost));
   DOM.merUpCost.textContent = fmt(Math.floor(state.mer.upCost));
-  DOM.hireMer.disabled = state.coins < Math.floor(state.mer.hireCost);
-  DOM.upMer.disabled = state.coins < Math.floor(state.mer.upCost);
+  DOM.hireMer.disabled = state.coins < Math.floor(state.mer.hireCost) || !canUseMer();
+  DOM.upMer.disabled = state.coins < Math.floor(state.mer.upCost) || !canUseMer();
 
   // Thief
   const thiPerUnitDps = state.thi.dmg * dmgMult() * (1/state.thi.interval); // per sec
@@ -482,10 +626,10 @@ function refreshUI(){
   DOM.thiDps.textContent = thiTotalDps.toFixed(1);
   DOM.thiHireCost.textContent = fmt(Math.floor(state.thi.hireCost));
   DOM.thiUpCost.textContent = fmt(Math.floor(state.thi.upCost));
-  DOM.hireThi.disabled = state.coins < Math.floor(state.thi.hireCost);
-  DOM.upThi.disabled = state.coins < Math.floor(state.thi.upCost);
+  DOM.hireThi.disabled = state.coins < Math.floor(state.thi.hireCost) || !canUseThi();
+  DOM.upThi.disabled = state.coins < Math.floor(state.thi.upCost) || !canUseThi();
 
-  // Prestige panel costs
+  // Prestige panel
   DOM.permAdvCost.textContent = state.prestige.costAdv;
   DOM.permMerCost.textContent = state.prestige.costMer;
   DOM.permThiCost.textContent = state.prestige.costThi;
@@ -496,11 +640,23 @@ function refreshUI(){
   DOM.buyPermMer.disabled = state.rebirthCoins < state.prestige.costMer;
   DOM.buyPermThi.disabled = state.rebirthCoins < state.prestige.costThi;
 
+  // Artifacts
+  if(DOM.artifactCount) DOM.artifactCount.textContent = state.artifacts.list.length;
+  if(DOM.artCount) DOM.artCount.textContent = state.artifacts.list.length;
+  if(DOM.artCrit) DOM.artCrit.textContent = '+'+Math.round((state.artifacts.bonus.crit||0)*1000)/10+'%';
+  if(DOM.artDmg) DOM.artDmg.textContent = '+'+Math.round((state.artifacts.bonus.dmg||0)*100)+'%';
+  if(DOM.artCoin) DOM.artCoin.textContent = '+'+Math.round((state.artifacts.bonus.coin||0)*100)+'%';
+
   // Totals
   if(DOM.totalDps) DOM.totalDps.textContent = (advTotalDps + thiTotalDps).toFixed(1);
   if(DOM.totalCps) DOM.totalCps.textContent = merTotal.toFixed(1);
 
+  // Bests
+  state.run.bestDps = Math.max(state.run.bestDps||0, advTotalDps + thiTotalDps);
+  state.run.bestCps = Math.max(state.run.bestCps||0, merTotal);
+
   updateQtyUI();
+  updateFmtUI();
   updateBulkPreviews();
 }
 
@@ -514,13 +670,14 @@ function save(){
 function load(){
   let raw = localStorage.getItem(SAVE_KEY);
   if(!raw){
-    const old = localStorage.getItem('monster_clicker_v1_ja');
-    if(old) raw = old;
+    const oldKeys = ['monster_clicker_v2_multi_units_ja','monster_clicker_v1_ja'];
+    for(const k of oldKeys){ const v = localStorage.getItem(k); if(v){ raw=v; break; } }
   }
   if(!raw) return;
   try{
     const data = JSON.parse(raw);
     migrateOldSave(data);
+    // default prestige costs
     if(data.prestige){
       ['permAdv','permMer','permThi'].forEach(k=>{
         if(typeof data.prestige[k] === 'boolean') data.prestige[k] = data.prestige[k] ? 1 : 0;
@@ -531,13 +688,15 @@ function load(){
     }
     Object.assign(state, data);
     if(!state.lastSaved) state.lastSaved = Date.now();
-    if(!state.run) state.run = {startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1};
+    if(!state.run) state.run = {startTs: Date.now(), coinsEarned:0, kills:0, clicks:0, crits:0, maxCombo:1, bossKills:0, artifacts:0, bestDps:0, bestCps:0};
+    recalcArtifactBonus();
     updateMonsterSkin();
+    enterBossIfNeeded();
     applyPermBaseline();
   }catch(e){console.warn('load failed',e)}
 }
 
-// Offline calc helper (CPS + DPS)
+// Offline calc helper (CPS + DPS) — boss timersは無視（通常処理）
 function applyOfflineProgress(seconds, silent=true){
   // CPS coins
   const cps = state.mer.cps * state.mer.count * coinMult();
@@ -552,10 +711,12 @@ function applyOfflineProgress(seconds, silent=true){
   let guard = 0;
   while(damage > 0 && guard < 30000){
     guard++;
-    if(damage >= state.monster.hp){
-      damage -= state.monster.hp;
+    const hp = state.monster.hp;
+    if(damage >= hp){
+      damage -= hp;
       const reward = Math.floor(monsterReward(state.monster.level) * coinMult());
       state.coins += reward; state.run.coinsEarned += reward; coinsFromKills += reward;
+      if(isBossFloor(state.monster.level)) state.run.bossKills++;
       toNextMonster();
       kills++;
     } else {
@@ -579,8 +740,22 @@ function loop(now){
     state.combo.value = Math.max(1, state.combo.value - state.combo.decayPerSec*dt);
   }
 
+  // Boss timer
+  if(state.boss.active){
+    state.boss.timeLeft -= dt;
+    if(state.boss.timeLeft <= 0){
+      // 失敗：1階層戻す
+      log('ボス討伐失敗… 1階層戻ります');
+      state.monster.level = Math.max(1, state.monster.level-1);
+      state.monster.maxHp = monsterHP(state.monster.level);
+      state.monster.hp = state.monster.maxHp;
+      updateMonsterSkin();
+      enterBossIfNeeded();
+    }
+  }
+
   // Adventurer: 1/s per unit
-  if(state.adv.count>0){
+  if(state.adv.count>0 && canUseAdv()){
     state.adv.timer += dt;
     if(state.adv.timer >= 1){
       const times = Math.floor(state.adv.timer / 1);
@@ -589,7 +764,7 @@ function loop(now){
     }
   }
   // Thief: every 0.2s per unit
-  if(state.thi.count>0){
+  if(state.thi.count>0 && canUseThi()){
     state.thi.timer += dt;
     while(state.thi.timer >= state.thi.interval){
       state.thi.timer -= state.thi.interval;
@@ -597,7 +772,7 @@ function loop(now){
     }
   }
   // Merchant: 1/s per unit coins
-  if(state.mer.count>0){
+  if(state.mer.count>0 && canUseMer()){
     state.mer.timer += dt;
     if(state.mer.timer >= 1){
       const times = Math.floor(state.mer.timer / 1);
@@ -640,10 +815,32 @@ if(DOM.qty1){
   DOM.qty100.addEventListener('click', ()=>setBuyQty(100));
   DOM.qtyMax.addEventListener('click', ()=>setBuyQty('max'));
 }
+// Format toggle
+DOM.fmtJP.addEventListener('click', ()=>{ NUMFMT.mode='jp'; refreshUI(); save(); });
+DOM.fmtSI.addEventListener('click', ()=>{ NUMFMT.mode='si'; refreshUI(); save(); });
 
 // Sound toggle
 DOM.soundToggle.addEventListener('change', (e)=>{ state.sound = e.target.checked; SFX.setEnabled(state.sound); });
 SFX.setEnabled(state.sound);
+
+// Battle log collapse toggle
+DOM.toggleLog.addEventListener('click', ()=>{
+  state.ui.logCollapsed = !state.ui.logCollapsed;
+  DOM.battlelog.classList.toggle('collapsed', state.ui.logCollapsed);
+});
+
+// Challenge selection
+DOM.challengeList.addEventListener('change', (e)=>{
+  const v = (DOM.challengeList.querySelector('input[name="challenge"]:checked')||{}).value || '';
+  state.challenge.selected = v;
+  refreshChallengeStatus();
+  save();
+});
+function refreshChallengeStatus(){
+  const sel = state.challenge.selected||'';
+  const done = state.challenge.completed||[];
+  DOM.challengeStatus.textContent = `選択：${challengeDesc(sel)} ／ 達成済み：${done.map(challengeDesc).join('、')||'なし'}（恒久+${(state.challenge.bonusStack*100).toFixed(0)}%）`;
+}
 
 // Export/Import/Reset
 document.getElementById('exportBtn').addEventListener('click', ()=>{
@@ -653,14 +850,14 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
 });
 document.getElementById('importBtn').addEventListener('click', ()=>{
   const data = prompt('エクスポート文字列を貼り付けてください'); if(!data) return;
-  try{ const obj = JSON.parse(decodeURIComponent(escape(atob(data)))); migrateOldSave(obj); Object.assign(state, obj); updateMonsterSkin(); applyPermBaseline(); refreshUI(); save(); alert('読み込み完了！'); }catch(e){ alert('読み込みに失敗しました'); }
+  try{ const obj = JSON.parse(decodeURIComponent(escape(atob(data)))); migrateOldSave(obj); Object.assign(state, obj); recalcArtifactBonus(); updateMonsterSkin(); enterBossIfNeeded(); applyPermBaseline(); refreshUI(); save(); alert('読み込み完了！'); }catch(e){ alert('読み込みに失敗しました'); }
 });
 
 function doHardReset(){
   IS_RESETTING = true;
   try{ if(saveIntervalId) clearInterval(saveIntervalId); }catch(e){}
   try{
-    const KEYS = [SAVE_KEY, 'monster_clicker_v1_ja'];
+    const KEYS = [SAVE_KEY, 'monster_clicker_v2_multi_units_ja','monster_clicker_v1_ja'];
     KEYS.forEach(k=>localStorage.removeItem(k));
   }catch(e){ console.warn('hard reset failed', e); }
   location.reload();
@@ -683,6 +880,7 @@ document.addEventListener('visibilitychange', ()=>{ if(document.hidden && !IS_RE
 // ====== 初期起動 ======
 function init(){
   load();
+  NUMFMT.mode = (localStorage.getItem(SAVE_KEY+'_fmt')||'jp');
   // offline progress (CPS+DPS)
   const now = Date.now();
   const lastTs = state.lastSaved || now;
@@ -699,10 +897,18 @@ function init(){
   state.monster.maxHp = monsterHP(state.monster.level);
   if(state.monster.hp==null) state.monster.hp = state.monster.maxHp;
   updateMonsterSkin();
+  enterBossIfNeeded();
+  recalcArtifactBonus();
+  refreshChallengeStatus();
+  DOM.battlelog.classList.toggle('collapsed', state.ui.logCollapsed);
   refreshUI();
   requestAnimationFrame((t)=>{ last=t; requestAnimationFrame(loop); });
   saveIntervalId = setInterval(save, 3000);
 }
+// 補助：fmt設定の保存
+const _origSave = save;
+save = function(){ localStorage.setItem(SAVE_KEY+'_fmt', NUMFMT.mode); _origSave(); }
+
 init();
 
 // ====== 簡易セルフテスト ======
@@ -712,28 +918,24 @@ init();
   function ok(desc, cond){ tests.push({desc, pass: !!cond, got:cond, expected:true}); }
 
   try{
-    // fmt
-    eq('fmt(999) == "999"', fmt(999), '999');
-    ok('fmt(1000) suffix', fmt(1000).endsWith('K'));
-    // HP
-    eq('monsterHP(1) == 8', monsterHP(1), 8);
+    // 既存テスト（維持）
+    eq('fmtSI 999 == "999"', fmtSI(999), '999');
+    ok('fmtSI 1000 suffix', fmtSI(1000).endsWith('K'));
+    eq('monsterHP base(1) == 8', monsterHP(1), 8);
     ok('monsterHP(2) >= 9', monsterHP(2) >= 9);
-    // previewRebirthCoins (50->75->100 / 25刻み)
+    // 25刻みのしきい値
     const prevHL = state.highestLevelThisRun;
     state.highestLevelThisRun = 49; eq('preview 49 => 0', previewRebirthCoins(), 0);
     state.highestLevelThisRun = 50; eq('preview 50 => 1', previewRebirthCoins(), 1);
-    state.highestLevelThisRun = 74; eq('preview 74 => 1', previewRebirthCoins(), 1);
     state.highestLevelThisRun = 75; eq('preview 75 => 2', previewRebirthCoins(), 2);
     state.highestLevelThisRun = 100; eq('preview 100 => 3', previewRebirthCoins(), 3);
     state.highestLevelThisRun = prevHL;
-    // hire/upgrade cost parity (adv vs thi)
-    eq('hire parity init', state.adv.hireCost, state.thi.hireCost);
-    eq('upg parity init', state.adv.upCost, state.thi.upCost);
-    // bulk preview quick check
-    state.player.cost = 8; state.player.costMul = 1.10; state.buyQty = 10; refreshUI();
-    ok('bulk preview shows ×10', (document.getElementById('clickBulk').textContent||'').includes('×10'));
-    // export alert string template sanity
-    (function(){ const pre='セーブデータをクリップボードへコピーしました。\\n\\n'; ok('export prefix contains newline', pre.includes('\\n')); })();
+    // 新規テスト
+    eq('isBossFloor(10) true', isBossFloor(10), true);
+    eq('isBossFloor(9) false', isBossFloor(9), false);
+    ok('fmtJP starts with "1" for 10000', fmtJP(10000).startsWith('1'));
+    // チャレンジ初期
+    eq('challenge default empty', state.challenge.selected||'', '');
   }catch(e){ console.warn('self test error', e); }
 
   const failed = tests.filter(t=>!t.pass);

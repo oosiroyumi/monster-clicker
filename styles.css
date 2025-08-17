@@ -50,17 +50,27 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .hint{opacity:.8}
 .danger{color:var(--danger)}
 
-/* === Reset Modal === */
+/* === Reset/Result Modal === */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:1000}
-.modal .box{width:min(520px,92vw);background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid rgba(255,255,255,.12);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.5);padding:16px}
+.modal .box{width:min(560px,92vw);background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid rgba(255,255,255,.12);border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.5);padding:16px}
 .modal .box h3{margin:0 0 8px 0}
 .modal .box p{margin:0 0 12px 0;color:var(--muted)}
 .modal .actions{display:flex;gap:10px;justify-content:flex-end}
 .modal .actions button{padding:10px 12px;border-radius:12px}
 .modal .actions .danger{background:#ffd1d1;color:#5b0d0d}
 
+.result-body{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.result-body .item{background:#1b2042;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px;font-size:13px}
+.result-body .item strong{font-size:18px;display:block}
+
 /* qty bar */
 .qtybar{display:flex;justify-content:flex-end;margin:6px 0 10px 0}
 .seg{display:flex;gap:6px;background:#212749;border:1px solid rgba(255,255,255,.08);padding:4px;border-radius:999px}
 .seg button{background:transparent;color:var(--text);padding:6px 10px;border-radius:999px}
 .seg button.active{background:#2b335f;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+
+/* Battle log */
+.battlelog{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px;max-height:40%;overflow:auto;pointer-events:none;width:min(48%,320px)}
+.logitem{background:rgba(10,14,34,.62);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px 8px;font-size:12px;color:#dfe7ff;backdrop-filter:blur(2px)}
+.logitem .ts{opacity:.6;margin-right:6px}
+.logitem.crit{border-color:#ffcc66;box-shadow:0 0 0 1px rgba(255,204,102,.25) inset}

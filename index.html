@@ -14,6 +14,7 @@
         <div class="pill" title="所持コイン"><span>🪙</span><strong id="coins">0</strong></div>
         <div class="pill" title="転生コイン"><span>✨</span><strong id="rebirthCoins">0</strong></div>
         <div class="pill" title="転生ボーナス"><span>📈</span><strong id="bonus">×1.00</strong></div>
+        <div class="pill" title="クリコンボ"><span>💥</span><strong id="comboView">×1.00</strong></div>
         <div class="pill" title="合計DPS"><span>⚔️</span><strong id="totalDps">0</strong></div>
         <div class="pill" title="合計CPS"><span>⛏️</span><strong id="totalCps">0</strong></div>
         <div class="pill" title="効果音 ON/OFF"><label style="display:flex;gap:6px;align-items:center;cursor:pointer"><input id="soundToggle" type="checkbox" checked/>🔊SFX</label></div>
@@ -32,6 +33,7 @@
         <div class="monster-box" id="monsterBox" aria-label="モンスターを攻撃 (クリック)">
           <div class="monster" id="monster">🟩</div>
           <div class="floaters" id="floaters"></div>
+          <div class="battlelog" id="battlelog" aria-live="polite"></div>
         </div>
         <div class="hpwrap">
           <div class="hpbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100">
@@ -67,7 +69,7 @@
                 <h4>攻撃力 強化 <small id="clickLv">Lv.1</small></h4>
                 <p>クリック攻撃力を +1。現在: <strong id="clickDmg">1</strong></p>
                 <div class="row">
-                  <div class="kpi">💰 コスト: <strong id="clickCost">10</strong><small id="clickBulk" style="color:var(--muted);margin-left:6px"></small></div>
+                  <div class="kpi">💰 コスト: <strong id="clickCost">8</strong><small id="clickBulk" style="color:var(--muted);margin-left:6px"></small></div>
                   <button id="buyClick">購入</button>
                 </div>
               </div>
@@ -188,6 +190,17 @@
       <div class="actions">
         <button id="cancelReset" class="ghost">キャンセル</button>
         <button id="confirmReset" class="danger">初期化する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rebirth Result Modal -->
+  <div id="resultModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="resultTitle" style="display:none">
+    <div class="box">
+      <h3 id="resultTitle">リザルト</h3>
+      <div id="resultBody" class="result-body"></div>
+      <div class="actions">
+        <button id="closeResult" class="ghost">閉じる</button>
       </div>
     </div>
   </div>
